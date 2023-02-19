@@ -41,9 +41,7 @@ class MainActivity : AppCompatActivity() {
         
         val webSocketListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                webSocket.send("Hello, it's SSaurel !")
-                webSocket.send("What's up ?")
-                webSocket.send("deadbeef".decodeHex())
+                Log.d("Websocket", "Open " + response.message)
             }
             
             override fun onMessage(webSocket: WebSocket, text: String) {
