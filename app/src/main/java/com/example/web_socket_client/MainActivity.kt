@@ -16,6 +16,8 @@ import okhttp3.*
 import okio.ByteString
 import okio.ByteString.Companion.decodeHex
 import org.tensorflow.lite.task.vision.classifier.Classifications
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListener {
@@ -33,7 +35,9 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
         binding = ActivityMainBinding.inflate(layoutInflater)
         
         setContentView(binding.root)
-        client = OkHttpClient()
+        client = OkHttpClient.Builder()
+            .readTimeout(1, TimeUnit.DAYS)
+            .build()
         
         binding.start.setOnClickListener {
             start()
@@ -83,13 +87,14 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
             }
             
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                webSocket.close(NORMAL_CLOSURE_STATUS, null)
                 Log.d("Websocket", "Error " + t.message)
             }
             
             
         }
         val ws: WebSocket = client.newWebSocket(request, webSocketListener)
-        client.dispatcher.executorService.shutdown()
+//        client.dispatcher.executorService.shutdown()
     }
     
     override fun onError(error: String) {
@@ -102,11 +107,16 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
         updateResults(results)
     }
     
-    fun updateResults(listClassifications: List<Classifications>?) {
+    private fun updateResults(listClassifications: List<Classifications>?) {
         listClassifications?.let { it ->
             if (it.isNotEmpty()) {
                 val sortedCategories = it[0].categories.sortedBy { it?.index }
-                binding.blindspot.text = sortedCategories.first().label
+                binding.blindspot.text = when(sortedCategories.first().label){
+                    "0" -> "Right"
+                    "1" -> "Left"
+                    "2" -> "Clear"
+                    else -> "Unknown"
+                }
                 binding.confidence.text = String.format("%.2f", sortedCategories.first().score)
             }
         }
