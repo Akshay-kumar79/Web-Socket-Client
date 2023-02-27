@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.web_socket_client.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.*
 import okio.ByteString
 import okio.ByteString.Companion.decodeHex
@@ -42,13 +43,12 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
         binding.start.setOnClickListener {
             start()
         }
-
-
+        
         imageClassifierHelper = ImageClassifierHelper(context = this, imageClassifierListener = this)
     }
     
     private fun start() {
-        val request: Request = Request.Builder().url("ws://" + "192.168.234.134" + ":86/").build()
+        val request: Request = Request.Builder().url("ws://" + "192.168.4.1" + ":86/").build()
         
         val webSocketListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -61,22 +61,29 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
             
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 
-                lifecycleScope.launch(Dispatchers.Main) {
+                lifecycleScope.launch(Dispatchers.IO) {
                     Log.d("Websocket", "Receive");
                     val message = bytes.asByteBuffer()
                     val imageBytes = ByteArray(message.remaining())
                     message.get(imageBytes)
                     val bmp = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return@launch
-                    val viewWidth: Int = binding.imageView.width
+                    
+                    val viewWidth: Int
+                    withContext(Dispatchers.Main) {
+                        viewWidth = binding.imageView.width
+                    }
                     val matrix = Matrix()
 //                    matrix.postRotate(90f)
                     val bmp_traspose = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
                     val imagRatio = bmp_traspose.height.toFloat() / bmp_traspose.width.toFloat()
                     val dispViewH = (viewWidth * imagRatio).toInt()
                     val bitmap = Bitmap.createScaledBitmap(bmp_traspose, viewWidth, dispViewH, false)
-                    binding.imageView.setImageBitmap(bitmap)
                     
-                    imageClassifierHelper.classify(bitmap, Surface.ROTATION_0)
+                    launch(Dispatchers.Main) {
+                        binding.imageView.setImageBitmap(bitmap)
+                        imageClassifierHelper.classify(bitmap, Surface.ROTATION_0)
+                    }
+                    
                 }
                 
             }
@@ -104,14 +111,16 @@ class MainActivity : AppCompatActivity(), ImageClassifierHelper.ClassifierListen
     }
     
     override fun onResults(results: List<Classifications>?, inferenceTime: Long) {
-        updateResults(results)
+        lifecycleScope.launch(Dispatchers.Main) {
+            updateResults(results)
+        }
     }
     
     private fun updateResults(listClassifications: List<Classifications>?) {
         listClassifications?.let { it ->
             if (it.isNotEmpty()) {
                 val sortedCategories = it[0].categories.sortedBy { it?.index }
-                binding.blindspot.text = when(sortedCategories.first().label){
+                binding.blindspot.text = when (sortedCategories.first().label) {
                     "0" -> "Right"
                     "1" -> "Left"
                     "2" -> "Clear"
